@@ -1,0 +1,134 @@
+# -*- coding: utf-8 -*-
+"""
+Created on Mon Feb 19 08:39:11 2024
+
+@author: bcsal
+
+Top NCAA Prospects
+"""
+import pandas as pd 
+from sklearn.model_selection import train_test_split
+from sklearn.linear_model import LinearRegression
+from sklearn.preprocessing import StandardScaler
+from sklearn.metrics import mean_squared_error
+from sklearn.neural_network import MLPRegressor
+
+
+#Defines the names of players in our NCAA + NBA List who were top 100 for each year
+def top100 (): 
+    #storing the columns that have the names in dataframe
+    seasons = list(range(2010,2024))
+    
+    allyears = {}
+    topNames = pd.DataFrame()
+    
+    #loop through the years
+    for season in seasons: 
+        
+        #open the ESPN list (multiple sheets named for year)
+        ESPN100 = pd.read_excel("College/Average Stats/espntop100.xlsx", sheet_name=f"{season}")
+        #nameDics[f"{season}"] = ESPN100["RK"]
+        
+        #The RK column has more than names, but will be fixed
+        topNames[f"{season}"] = ESPN100["RK"]
+        
+        #Open the stats for each year- college
+        NCAA = pd.read_csv("NBA_NCAA_Stats.csv")
+        
+        NCAA["relWPS"] = NCAA["HEIGHT (ft)"]/NCAA["WINGSPAN (ft)"]
+        NCAA["ATR"] = NCAA["AST"]/NCAA["TOV"]
+        NCAA["FTR"] = NCAA["FTA"]/NCAA["FGA"]
+      
+        filtered_NCAA = NCAA[NCAA['Player'].isin(ESPN100['RK'])]
+        filtered_NCAA["Year"] = season
+        
+        allyears[f"{season}"] = filtered_NCAA
+
+#Returns the Dict that houses all that stats for each year
+    return allyears
+
+
+
+#same stats as above to train the model
+stats = pd.read_csv("NBA_NCAA_Stats.csv")
+
+finishingStats_col = ['Player', 'Finishing', 'HEIGHT (ft)', 
+                       'WEIGHT (lbs)', 'WINGSPAN (ft)', 'AST%','WS', 'PProd',
+                       'BPM', 'AST', 'TOV', "FTA", "FGA", "SOS", '2P%', 'OBPM', 'ORB%', 'BLK%', 'FG%']
+
+playStats = stats[finishingStats_col]
+playStats["relWPS"] = playStats["HEIGHT (ft)"]/playStats["WINGSPAN (ft)"]
+playStats["ATR"] = playStats["AST"]/playStats["TOV"]
+playStats["FTR"] = playStats["FTA"]/playStats["FGA"]
+
+playStats = playStats.fillna(0)
+
+predictors = ['2P%', 'OBPM', 'ORB%', 'BLK%', 'FG%', 'relWPS', "FTR", "SOS"]
+
+
+#validate the correlation between the predictors and the final playmaking 
+#print(playStats[predictors].corr()["Playmaking"])
+
+# Assuming 'playStats' is your dataframe and predictors are defined
+
+X = playStats[predictors]
+y = playStats["Finishing"]
+
+# Splitting the data into training and testing sets
+X_train, X_test, y_train, y_test = train_test_split(
+    X, y, random_state=104, test_size=0.25, shuffle=True)
+
+# Printing the shapes of training and testing sets
+# Scaling the features
+scaler = StandardScaler()
+scaler.fit(X_train)
+X_train = scaler.transform(X_train)
+X_test = scaler.transform(X_test)
+
+# Fitting the linear regression model
+
+#model = LinearRegression().fit(X_train, y_train)
+model = MLPRegressor(hidden_layer_sizes =(100, 50, 10)).fit(X_train, y_train)
+
+# Making predictions
+y_pred = model.predict(X_test)
+print(y_pred)
+
+# Calculating Mean Squared Error
+print(mean_squared_error(y_test, y_pred))
+
+results_df = pd.DataFrame({
+    'Player': playStats.iloc[y_test.index]['Player'],
+    'Actual_Score': y_test.values,
+    'Predicted_Score': y_pred
+})
+
+
+results_df_sorted = results_df.sort_values(by='Predicted_Score', ascending=False)
+
+# Print the DataFrame
+#print(results_df_sorted)
+
+#once the model is generated, use model.predict()
+def validate(year): 
+    NewClass = top100()[f"{year}"]
+    #playmakingStats_col = ['Player', '3PAr', '3P', '3PA', 'FT%', 'PTS', 'OBPM', "TS%", "OWS", "SOS"]
+    predictors = ['2P%', 'OBPM', 'ORB%', 'BLK%', 'FG%', 'relWPS', "FTR", "SOS"]
+    playStats = NewClass[predictors]
+    #playStats.fillna(0)
+    
+    
+    playStats.fillna(0, inplace=True)
+    
+    NewClass['Finishing Prediction'] = model.predict(playStats[predictors])
+    predictions_df = NewClass[['Player', 'Finishing Prediction']]
+    predictions_df_sorted = predictions_df.sort_values(by='Finishing Prediction', ascending=False)
+    #predictions_df_sorted.to_csv("2023_shooting_predictions.csv")
+    print(predictions_df_sorted)
+
+#proof of concept to validate just one year.
+validate(2020)
+
+
+
+    
