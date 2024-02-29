@@ -1,0 +1,66 @@
+# -*- coding: utf-8 -*-
+"""
+Created on Tue Jan 16 16:02:54 2024
+
+@author: BCS
+
+Checking the new advanced playmaking
+"""
+import math
+import numpy
+import pandas as pd
+import ScoreMath as sm
+
+playmaking_scores = []
+
+def trimData(df):
+    df.fillna(value = 0, inplace = True)
+    #df.loc[df['AST'] <= 0.5, ['AST']] = 0
+    
+    for idx, row in df.iterrows():
+        if( row['MP'] < 300 ):
+            df.drop( labels = idx , axis = 0, inplace = True)
+    
+def calculate_playmaking_score( stats, name,ast_pct, tov, pct_2_astd, pct_3_astd, vorp, obpm, PSRP):
+    
+    
+    ast_pct_pcentile = sm.calculate_percentile(ast_pct, numpy.mean(stats["AST%"]), numpy.std(stats["AST%"]))
+    PSRP_pcentile = sm.calculate_percentile(PSRP, numpy.mean(stats["PSRP"]), numpy.std(stats["PSRP"]))
+    pct_2_astd_pcentile = sm.calculate_percentile(pct_2_astd, numpy.mean(stats["%FG_assisted_2P"]), numpy.std(stats["%FG_assisted_2P"]))
+    pct_3_astd_pcentile = sm.calculate_percentile(pct_3_astd, numpy.mean(stats["%FG_assisted_3P"]), numpy.std(stats["%FG_assisted_3P"]))
+
+    
+    if(vorp < 0): vorp = 0
+    
+    playmaking_score_scaler = min( 1, 0.5 * (obpm/7) + 0.5 * (vorp/9))
+    playmaking_score_basis = min( 1, 0.4 * ast_pct_pcentile + 0.4 * PSRP_pcentile + 0.1 * ( 1 - pct_2_astd_pcentile ) + 0.1 * ( 1 - pct_3_astd_pcentile ) )  
+    
+    playmaking_score = 0.2 * (playmaking_score_scaler) + 0.8 * (playmaking_score_basis)
+    
+    playmaking_scores.append( [name, playmaking_score] )
+
+def calculate_all_playmaking_scores(season):
+    allstats_season = pd.read_csv(f"Proof/finalstats/{season} stats and tracking.csv")
+    trimData(allstats_season)
+    
+    
+    playmaking_headings = ['PLAYER', 'AST%', "PSRP", 'TOV', '%FG_assisted_2P', '%FG_assisted_3P', 'VORP', 'OBPM'] 
+    allstats = allstats_season[playmaking_headings]
+    
+
+    for index, row in allstats.iterrows():
+        calculate_playmaking_score( allstats, row['PLAYER'], row['AST%'], row['TOV'], row['%FG_assisted_2P'], row['%FG_assisted_3P'], row['VORP'], row['OBPM'], row["PSRP"])
+ 
+    return playmaking_scores
+
+p = calculate_all_playmaking_scores(2023) #for each season
+p = sorted(p, key = lambda p: p[1], reverse = True)
+print("DONE!")
+
+df = pd.DataFrame(p, columns = ["Player", "Playmaking"])
+#df.to_csv("CODES AND FILES/PlaymakingScores.csv")
+print(df)
+
+
+#allstats_season = pd.read_csv("Proof/finalstats/2023 stats and tracking.csv")
+
